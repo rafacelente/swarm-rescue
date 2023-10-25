@@ -38,9 +38,13 @@ class MyDronePid(DroneAbstract):
         self.current_location = np.array([295,118])
         self.orientation = -math.pi/2 #math.pi
 
-        self.assigned_target = True
-        self.target_location = np.array([310, -180])
-        
+        self.targets = {
+            'wounded_person': np.array([310, -180]),
+            'rescue_center': np.array([295, 205]) 
+        }
+        self.assigned_target = 'wounded_person'
+        self.target_location = self.targets[self.assigned_target]
+
         self.alignment_threshold = 0.1
         self.diff_angle = self.get_rotate_angle()
         self.state_machine = InformedSimpleDrone(self)
@@ -57,17 +61,23 @@ class MyDronePid(DroneAbstract):
         theta = np.arctan2(dist_vector[1], dist_vector[0])
         return theta
 
-
     def control(self):
         """
         The Drone will move forward and turn for a random angle when an obstacle is hit
         """
 
-        print(self.grasped_entities())
+
         # Updating information
         self.current_location = self.true_position()
-        theta = self.get_rotate_angle()
 
+        # Updating target information
+        self.target_location = self.targets[self.assigned_target]
+
+        print(self.grasped_entities())
+        print(f'target: {self.assigned_target}')
+        print(f'target location: {self.target_location}')
+
+        theta = self.get_rotate_angle()
         measured_angle = 0
         if self.measured_compass_angle() is not None:
             measured_angle = self.measured_compass_angle()
@@ -77,44 +87,6 @@ class MyDronePid(DroneAbstract):
         # State machine step
         self.state_machine.send("cycle")
         return self.state_machine.get_command()
-
-        # #state_machine.
-
-        # self.current_location = self.true_position()
-        # dist_vector = self.target_location - self.current_location
-        # theta = np.arctan2(dist_vector[1], dist_vector[0])
-
-        
-
-        # command_straight = {"forward": 0.6,
-        #                     "lateral": 0.0,
-        #                     "rotation": 0.0,
-        #                     "grasper": 0}
-
-        # command_turn = {"forward": 0.0,
-        #                 "lateral": 0.0,
-        #                 "rotation": 0.6,
-        #                 "grasper": 0}
-
-
-        # measured_angle = 0
-        # if self.measured_compass_angle() is not None:
-        #     measured_angle = self.measured_compass_angle()
-        
-        # diff_angle = normalize_angle(theta - measured_angle)
-        # print(f'diff_angle: {diff_angle}')
-
-        # if abs(diff_angle) > 0.1:
-        #     self.isTurning = True
-        # else:
-        #     self.isTurning = False
-
-        # print(f'policy self.isTurning: {self.isTurning}')
-
-        # if self.isTurning:
-        #     return command_turn
-        # else:
-        #     return command_straight
 
     def draw_bottom_layer(self):
         self.draw_vector()
