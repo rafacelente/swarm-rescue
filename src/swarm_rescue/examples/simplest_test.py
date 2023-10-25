@@ -25,7 +25,9 @@ from spg_overlay.utils.utils import normalize_angle
 from spg_overlay.utils.misc_data import MiscData
 from maps.map_simple import MyMapSimple
 from state_machine import InformedSimpleDrone
+from random import randrange
 
+random_target = (random.randrange(-300, 300), random.randrange(-300, 300))
 
 class MyDronePid(DroneAbstract):
     def __init__(self, **kwargs):
@@ -39,7 +41,7 @@ class MyDronePid(DroneAbstract):
         self.orientation = -math.pi/2 #math.pi
 
         self.targets = {
-            'wounded_person': np.array([310, -180]),
+            'wounded_person': random_target,
             'rescue_center': np.array([295, 205]) 
         }
         self.assigned_target = 'wounded_person'
@@ -160,6 +162,7 @@ class MyMapRandom(MapAbstract):
 
 def main():
     my_map = MyMapSimple()
+    my_map._wounded_persons_pos = [random_target]
 
     playground = my_map.construct_playground(drone_type=MyDronePid)
 
