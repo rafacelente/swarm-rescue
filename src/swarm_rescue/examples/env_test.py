@@ -7,6 +7,7 @@ import math
 import os
 import sys
 from typing import List, Type, Tuple
+import gymnasium as gym
 
 import arcade
 import numpy as np
@@ -19,18 +20,22 @@ from spg_overlay.utils.pose import Pose
 from spg_overlay.utils.utils import clamp
 from spg_overlay.entities.drone_abstract import DroneAbstract
 from spg_overlay.gui_map.closed_playground import ClosedPlayground
-from spg_overlay.gui_map.gui_sr import GuiSR
-#from spg_overlay.gui_map.env_logic import EnvLogic
+#from spg_overlay.gui_map.gui_sr import GuiSR
+from spg_overlay.environments.env_sr import EnvSR
 from spg_overlay.gui_map.map_abstract import MapAbstract
 from spg_overlay.utils.utils import normalize_angle
 from spg_overlay.utils.misc_data import MiscData
-from maps.map_simple import MyMapSimple
+#from maps.map_simple import MyMapSimple
 from state_machine import InformedSimpleDrone
+from maps.map_env import EnvMap
 from random import randrange
 
-random_target = (random.randrange(-300, 300), random.randrange(-300, 300))
+from stable_baselines3 import A2C, PPO
+from stable_baselines3.common.env_util import make_vec_env
 
-class MyDronePid(DroneAbstract):
+random_target = (random.randrange(-300, 300), random.randrange(-300, 300))
+fixed_target = (0,0)
+class MyDroneEnv(DroneAbstract):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.counter = 0
@@ -39,10 +44,10 @@ class MyDronePid(DroneAbstract):
         self.path_done = Path()
         self.initial_pos = np.array([295,118])
         self.current_location = np.array([295,118])
-        self.orientation = -math.pi/2 #math.pi
+        self.orientation = math.pi
 
         self.targets = {
-            'wounded_person': random_target,
+            'wounded_person': fixed_target,
             'rescue_center': np.array([295, 205]) 
         }
         self.assigned_target = 'wounded_person'
@@ -134,51 +139,62 @@ class MyDronePid(DroneAbstract):
         arcade.draw_line(pt2[0], pt2[1], pt1[0], pt1[1], color)
 
 
-class MyMapRandom(MapAbstract):
-    def __init__(self):
-        super().__init__()
-
-        # PARAMETERS MAP
-        self._size_area = (900, 900)
-
-        # POSITIONS OF THE DRONES
-        self._number_drones = 1
-        self._drones_pos = []
-        for i in range(self._number_drones):
-            pos = ((0, 0), 0)
-            self._drones_pos.append(pos)
-
-        self._drones: List[DroneAbstract] = []
-
-    def construct_playground(self, drone_type: Type[DroneAbstract]):
-        playground = ClosedPlayground(size=self._size_area)
-
-        # POSITIONS OF THE DRONES
-        misc_data = MiscData(size_area=self._size_area,
-                             number_drones=self._number_drones)
-        for i in range(self._number_drones):
-            drone = drone_type(identifier=i, misc_data=misc_data)
-            self._drones.append(drone)
-            playground.add(drone, self._drones_pos[i])
-
-        return playground
-
 
 def main():
-    my_map = MyMapSimple()
-    my_map._wounded_persons_pos = [random_target]
+    my_map = EnvMap()
+    my_map._wounded_persons_pos = [fixed_target]
 
-    playground = my_map.construct_playground(drone_type=MyDronePid)
+    playground = my_map.construct_playground(drone_type=MyDroneEnv)
 
-    gui = GuiSR(playground=playground,
-                the_map=my_map,
-                use_keyboard=False,
-                use_mouse_measure=True,
-                enable_visu_noises=False,
-                )
+    env = EnvSR(playground=playground,
+               the_map=my_map,
+               objective=fixed_target
+    )
+    
+    # TEST RUN
+    # obs, _ = env.reset()
 
-    gui.run()
+    # n_steps = 20
+    # FORWARD = 1
+    # for step in range(n_steps):
+    #     print(f"Step {step+1}")
+    #     obs, reward, terminated, truncated, info = env.step(FORWARD)
+    #     done = terminated or truncated
+    #     print(f"obs = {obs}, reward = {reward}, done = {done}")
+    #     if done:
+    #         print(f"Goal reached! Reward = {reward}")
+    #         break
+    # vec_env = make_vec_env(EnvSR, n_envs=1, env_kwargs=dict(playground=playground,
+    #            the_map=my_map,
+    #            objective=fixed_target))
+    
+    model = PPO("MlpPolicy", env, gamma=0.999, gae_lambda=0.85, ent_coef=0.05, verbose=1).learn(total_timesteps=100000)
+    #model = PPO("MlpPolicy", env, verbose=1).learn(5)
 
+    print('\n\nStarting evaluation\n\n')
+    obs, _ = env.reset()
+    n_steps = 500
+    eval_episodes = 1
+    total_reward = 0
 
+    for episode in range(eval_episodes):
+        obs, _ = env.reset()
+        episode_reward = 0
+        for asd in range(n_steps):
+            action, _ = model.predict(obs, deterministic=True)
+            #print(f"Step {step+1}")
+            #print(f"Action: {action}")
+            obs, reward, terminated, truncated, info = env.step(action)
+            done = terminated
+            if asd % 100 == 0 or asd == 500:
+                print(f"obs = {obs}, reward = {reward}, done = {done}")
+            if done:
+                print(f"Goal reached! Reward = {reward}")
+                break
+            episode_reward += reward
+        print(f'Episode {episode}: Reward = {episode_reward}')
+        total_reward += reward
+
+    print(f'Average reward over {eval_episodes} episodes: {total_reward/eval_episodes}')
 if __name__ == '__main__':
     main()

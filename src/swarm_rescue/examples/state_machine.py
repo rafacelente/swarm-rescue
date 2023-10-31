@@ -50,7 +50,7 @@ class InformedSimpleDrone(StateMachine):
 
     def before_cycle(self, event: str, source: State, target: State, message: str = ""):
         message = ". " + message if message else ""
-        #print(f"Running {event} from {source.id} to {target.id}{message}")
+        print(f"Running {event} from {source.id} to {target.id}{message}")
     
         
     def on_enter_idle(self):
