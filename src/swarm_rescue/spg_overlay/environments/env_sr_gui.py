@@ -13,30 +13,36 @@ from gymnasium import spaces
 from spg_overlay.utils.constants import FRAME_RATE, DRONE_INITIAL_HEALTH
 from spg_overlay.entities.drone_abstract import DroneAbstract
 from spg_overlay.gui_map.map_abstract import MapAbstract
-import random
+from spg.view import TopDownView
 
 
-class EnvSR(gym.Env):
-    """
-    The EnvSR class is a subclass of TopDownView and provides a graphical user interface for the simulation. It handles
-    the rendering of the playground, drones, and other visual elements, as well as user input and interaction.
-    """
 
+class EnvSRGui(TopDownView, gym.Env):
     def __init__(
             self,
             the_map: MapAbstract,
             playground: Playground,
             objective : Optional[Tuple[int, int]] = None,
             size: Optional[Tuple[int, int]] = None,
-            render_mode: Optional[str] ="rgb",
-            reset_type : Optional[int] = 1,
+            render_mode="rgb",
+            center: Tuple[float, float] = (0, 0),
     ) -> None:
-        super(EnvSR, self).__init__()
+        super().__init__(
+            playground,
+            size,
+            center,
+            1,
+            False,
+            False,
+            False,
+            False,
+        )
 
         # Playground definition
         self._size = size
         self._playground = playground
         self._playground.window.set_size(*self._playground.size)
+        self._playground.window.set_visible(True) # Gui
         self.last_distance = None
 
         # Map and drones definition
@@ -73,8 +79,8 @@ class EnvSR(gym.Env):
 
         # Playground step definitions
         self._playground.window.on_update = self.step
+        self._playground.window.on_draw = self.on_draw
         self._playground.window.set_update_rate(FRAME_RATE)
-
 
         # Parameter initializations
         self._total_number_wounded_persons = self._the_map.number_wounded_persons
@@ -84,15 +90,11 @@ class EnvSR(gym.Env):
         self._real_time_elapsed = 0
         self._terminate = False
         self._truncate = False
-        self._reset_type = reset_type
 
         # Action space definition (For now, forward and rotate)
         # Forward, rotate / yes or no
-            # n_actions = 4
-            # self.action_space = spaces.Discrete(n_actions) 
-        
-        # New action space: continuous
-        self.action_space = spaces.Box(low=-1.0, high=1.0, shape=(2,), dtype=np.float32)
+        n_actions = 4
+        self.action_space = spaces.Discrete(n_actions) 
         
         
         # State space definition
@@ -104,15 +106,13 @@ class EnvSR(gym.Env):
             [
                 -max_x,
                 -max_y,
-                min_dist_to_target,
-                min_dist_to_target, # Added last distance
+                min_dist_to_target
             ]
         ).astype(np.float32)
         high = np.array(
             [
                 max_x,
                 max_y,
-                max_dist_to_target,
                 max_dist_to_target
             ]
         ).astype(np.float32)
@@ -121,46 +121,38 @@ class EnvSR(gym.Env):
         # I don't know what this is
         self.render_mode = render_mode
 
-    # Doesn't check for overlapping...
-    def reset_drone(self, reset_type: Optional[int] = 1, random_range: Optional[Tuple[int, int]] = None):
-        # Reset Type 0 : fixed
-        loc = (100,100)
-        angle = np.pi
-        # Reset type 1: random
-        if reset_type == 1:
-            if random_range is None:
-                max_x = np.array(self._the_map._size_area)[0]/2 - 50
-                max_y = np.array(self._the_map._size_area)[1]/2 - 50
-            
-            loc = (random.randrange(-max_x, max_x), random.randrange(-max_y, max_y))
-            while np.linalg.norm(np.array(loc) - np.array(self.objective)) < 150:
-                loc = (random.randrange(-max_x, max_x), random.randrange(-max_y, max_y))
-            angle = random.uniform(-np.pi, np.pi)
-        
-        for drone in self._drones:
-            drone.initial_coordinates = (loc, angle)
-            drone.reset()
-
     def reset(self, seed: Optional[int]=None):
         #print('reseting environment...')
-        super().reset(seed=seed)
+        gym.Env().reset(seed=seed)
         self._real_time_elapsed = 0
-        self._elapsed_time = 0
         self._start_real_time = time.time()
+        self._elapsed_time = 0
         self.last_distance = None
+        self._the_map.reset_map() # This should randomly assign the drone and the objective
+        self.objective = self._the_map._wounded_persons_pos[0]
+        self._playground.reset()
         self._terminate = False
         self._truncate = False
+        #reset_step, _, _, _, _= self.step(0)
+        #print(f"reset_step: {reset_step}")
+        print(f'Drone Location: {self._drones[0].true_position()}')
+        print(f'Target Location: {self.objective}')
+        return self.step(0)[0], {}
+        #return self.step(0), {}
 
-        self._the_map.reset_map(reset_type=self._reset_type)
-        self.reset_drone(reset_type=self._reset_type)
-        self._playground.reset()
-        self.objective = self._the_map._wounded_persons_pos[0]
+    def draw_step(self, delta_time):
+        window = self._playground.window
 
-        #print(f'Drone loc: {self._drones[0].true_position()}')
-        #print(f'Target loc: {self._the_map._wounded_persons_pos[0]}')
+        # Select active view or window
+        active = window.current_view or window
 
-        # return self.step(0)[0], {} DISCRETE
-        return self.step(np.zeros(shape=(self.observation_space.shape)))[0], {}
+        if window.context:
+            active.on_draw()
+
+        # windwow could be closed in on_draw
+        if window.context:
+            window.flip()
+
 
     def step(self, action):
         self._elapsed_time += 1
@@ -168,23 +160,21 @@ class EnvSR(gym.Env):
         self._the_map.explored_map.update_drones(self._drones)
 
         # COMPUTE COMMANDS
-        # for i in range(self._number_drones):
-        #     #command = self._drones[i].control()
-        #     if action == 0:
-        #         self.command["forward"] = 0
-        #         self.command["rotation"] = 0
-        #     if action == 1:
-        #         self.command["forward"] = 1
-        #         self.command["rotation"] = 0
-        #     if action == 2:
-        #         self.command["forward"] = 0
-        #         self.command["rotation"] = 1
-        #     if action == 3:
-        #         self.command["forward"] = 1
-        #         self.command["rotation"] = 1
         for i in range(self._number_drones):
-            self.command["forward"] = action[0]
-            self.command["rotation"] = action[1]
+            #command = self._drones[i].control()
+            if action == 0:
+                self.command["forward"] = 0
+                self.command["rotation"] = 0
+            if action == 1:
+                self.command["forward"] = 1
+                self.command["rotation"] = 0
+            if action == 2:
+                self.command["forward"] = 0
+                self.command["rotation"] = 1
+            if action == 3:
+                self.command["forward"] = 1
+                self.command["rotation"] = 1
+            
             self._drones_commands[self._drones[i]] = self.command
 
 
@@ -194,7 +184,6 @@ class EnvSR(gym.Env):
         reward = 0
         
         drone_pos = self._drones[0].true_position()
-        #drone_vel = self._drones[0].true_velocity()
         
         distance_to_target = np.linalg.norm(np.array(self.objective - drone_pos))
         if self.last_distance is not None:
@@ -205,8 +194,11 @@ class EnvSR(gym.Env):
         end_real_time = time.time()
         last_real_time_elapsed = self._real_time_elapsed
         self._real_time_elapsed = (end_real_time - self._start_real_time)
+        delta_time = self._real_time_elapsed - last_real_time_elapsed
 
-        reward = 1/(distance_to_target + 0.4) + 0.05*how_closer #*0.05- 0.0003*np.absolute(drone_pos[0]) - 0.0003*np.absolute(drone_pos[1]) + how_closer*0.05
+        self.draw_step(delta_time)
+
+        reward = 1/(distance_to_target + 0.4) - 0.0003*np.absolute(drone_pos[0]) - 0.0003*np.absolute(drone_pos[1]) + how_closer*0.05
 
         if self._elapsed_time > self._time_step_limit:
             self._elapsed_time = self._time_step_limit
@@ -218,19 +210,41 @@ class EnvSR(gym.Env):
             self._truncate = True
 
         epsilon = 40
-        if (np.linalg.norm(np.array(drone_pos) - np.array(self.objective)) < epsilon):
-            reward += 1000
+        if (drone_pos[0] <= self.objective[0] + epsilon and drone_pos[0] >= self.objective[0] - epsilon) and (drone_pos[1] <= self.objective[1] + epsilon and drone_pos[1] >= self.objective[1] - epsilon):
+            reward += 10000
             print('Goal reached')
             self._terminate = True
         
         state = [
             drone_pos[0],
             drone_pos[1],
-            distance_to_target,
-            self.last_distance
+            distance_to_target
         ]
-        assert len(state) == 4
+        assert len(state) == 3
         return np.array(state, dtype=np.float32), reward, self._terminate, self._truncate, {}
+
+    def on_draw(self):
+        self._playground.window.clear()
+        self._fbo.use()
+        self.draw()
+    
+    def draw(self, force=False):
+        arcade.start_render()
+        self.update_sprites(force)
+
+        self._playground.window.use()
+        self._playground.window.clear(self._background)
+
+        for drone in self._playground.agents:
+            drone.draw_bottom_layer()
+
+
+        self._transparent_sprites.draw(pixelated=True)
+        self._interactive_sprites.draw(pixelated=True)
+        self._zone_sprites.draw(pixelated=True)
+        self._visible_sprites.draw(pixelated=True)
+        self._traversable_sprites.draw(pixelated=True)
+
 
 
     @property
