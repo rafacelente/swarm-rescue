@@ -37,7 +37,7 @@ class EnvSR(gym.Env):
         self._size = size
         self._playground = playground
         self._playground.window.set_size(*self._playground.size)
-        self.last_distance = None
+        self.state = 'search'
 
         # Map and drones definition
         self._the_map = the_map
@@ -96,27 +96,65 @@ class EnvSR(gym.Env):
         
         
         # State space definition
+
+        # 1) Discrete variables
+        collided = spaces.Discrete(2)
+        has_target = spaces.Discrete(2)
+        wounded_nearby = spaces.Discrete(2)
+
+        # 2) Continuous variables
         max_x = np.array(self._the_map._size_area)[0]/2
         max_y = np.array(self._the_map._size_area)[1]/2
-        min_dist_to_target = 0
-        max_dist_to_target = np.linalg.norm(np.array(self._the_map._size_area))
+        max_v = 5.5 # Max velocity (vx, vy)
+        max_angle = np.pi
+        min_view_distance = 0   # Minimum Lidar distance
+        max_view_distance = 310 # Maximum Lidar distance
+        min_semantic_distance = 0 # Minimum Semantic Sensor distance
+        max_semantic_distance = 210 # Maximum Semantic Sensor distance
+        min_distance_to_rc = 0
+        max_distance_to_rc = max(np.array(self._the_map._size_area))
+        
+        fov = 120
+        n_beams = 60 # Change this when fov changes
+        min_view_distance_list = [min_view_distance for i in range(n_beams)]
+        max_view_distance_list = [max_view_distance for i in range(n_beams)]
+
         low = np.array(
             [
-                -max_x,
-                -max_y,
-                min_dist_to_target,
-                min_dist_to_target, # Added last distance
+                -max_x, # x
+                -max_y, # y
+                -max_v, # vx
+                -max_v, # vy
+                -max_angle, # drone angle
+                *min_view_distance_list, # Lidar values (fov)
+                min_semantic_distance, # Semantic sensor distance
+                -max_angle, # Semantic sensor relative angle
+                min_distance_to_rc,
+                -max_angle
             ]
         ).astype(np.float32)
         high = np.array(
             [
-                max_x,
-                max_y,
-                max_dist_to_target,
-                max_dist_to_target
+                max_x, # x
+                max_y, # y
+                max_v, # vx
+                max_v, # vy
+                max_angle, # drone angle
+                *max_view_distance_list, # Lidar values (fov)
+                max_semantic_distance, # Semantic sensor distance
+                max_angle, # Semantic sensor relative angle
+                max_distance_to_rc,
+                max_angle
             ]
         ).astype(np.float32)
-        self.observation_space = spaces.Box(low, high)
+        continuous = spaces.Box(low, high)
+
+        self.observation_space = spaces.Tuple((
+            continuous,
+            collided,
+            has_target,
+            wounded_nearby
+        ))
         
         # I don't know what this is
         self.render_mode = render_mode
@@ -139,6 +177,8 @@ class EnvSR(gym.Env):
         
         for drone in self._drones:
             drone.initial_coordinates = (loc, angle)
+            drone.just_grabbed_wounded = False
+            drone.just_found_wounded = False
             drone.reset()
 
     def reset(self, seed: Optional[int]=None):
@@ -167,24 +207,8 @@ class EnvSR(gym.Env):
         
         self._the_map.explored_map.update_drones(self._drones)
 
-        # COMPUTE COMMANDS
-        # for i in range(self._number_drones):
-        #     #command = self._drones[i].control()
-        #     if action == 0:
-        #         self.command["forward"] = 0
-        #         self.command["rotation"] = 0
-        #     if action == 1:
-        #         self.command["forward"] = 1
-        #         self.command["rotation"] = 0
-        #     if action == 2:
-        #         self.command["forward"] = 0
-        #         self.command["rotation"] = 1
-        #     if action == 3:
-        #         self.command["forward"] = 1
-        #         self.command["rotation"] = 1
         for i in range(self._number_drones):
-            self.command["forward"] = action[0]
-            self.command["rotation"] = action[1]
+            self.command = self._drones[i].map_action(action)
             self._drones_commands[self._drones[i]] = self.command
 
 
@@ -193,20 +217,50 @@ class EnvSR(gym.Env):
         # REWARDS
         reward = 0
         
-        drone_pos = self._drones[0].true_position()
-        #drone_vel = self._drones[0].true_velocity()
+        state_space = self._drones[0].state_space()
+        continuous, collided, has_target, found_wounded = state_space
         
-        distance_to_target = np.linalg.norm(np.array(self.objective - drone_pos))
-        if self.last_distance is not None:
-            how_closer = self.last_distance - distance_to_target
+        drone_pos = continuous[0:2]
+        drone_vel = continuous[2:4]
+        drone_angle = continuous[4]
+        fov_view = continuous[5:65]
+        distance_to_wounded = continuous[65]
+        angle_to_wounded = continuous[66]
+        distance_to_rc = continuous[67]
+        angle_to_rc = continuous[68]
+        
+        # Maybe change this to a state machine
+        if not has_target:
+            if not found_wounded:
+                self.state = 'search'
+                reward += (drone_vel[0]*0.005 + drone_vel[0]*0.005 - 0.05*collided)
+            elif found_wounded and not self._drones[0].just_found_wounded:
+                self._drones[0].just_found_wounded = True
+                reward += 5
+            else:
+                self.state = 'approach'
+                reward += 1/(100*np.absolute(angle_to_wounded)/np.pi + 0.9)
+                reward += 1/(distance_to_wounded + 0.9)
         else:
-                how_closer = 0
-        self.last_distance = distance_to_target
+            reward += 0.005
+            if not self._drones[0].just_grabbed_wounded:
+                self.state = 'return'
+                self.drones[0].just_grabbed_wounded = True
+                reward += 20
+            else:
+                reward += 1/(20*np.absolute(angle_to_rc)/np.pi + 0.5)
+                reward += 1/(distance_to_rc/5 + 0.5)
+                if distance_to_rc < 40:
+                    reward += 300
+                    print('Goal Reached')
+                    self._terminate = True
+
+
+        print(self.state)
+        print(reward)
         end_real_time = time.time()
         last_real_time_elapsed = self._real_time_elapsed
         self._real_time_elapsed = (end_real_time - self._start_real_time)
-
-        reward = 1/(distance_to_target + 0.4) + 0.05*how_closer #*0.05- 0.0003*np.absolute(drone_pos[0]) - 0.0003*np.absolute(drone_pos[1]) + how_closer*0.05
 
         if self._elapsed_time > self._time_step_limit:
             self._elapsed_time = self._time_step_limit
@@ -217,20 +271,8 @@ class EnvSR(gym.Env):
             self._real_time_elapsed = self._real_time_limit
             self._truncate = True
 
-        epsilon = 40
-        if (np.linalg.norm(np.array(drone_pos) - np.array(self.objective)) < epsilon):
-            reward += 1000
-            print('Goal reached')
-            self._terminate = True
-        
-        state = [
-            drone_pos[0],
-            drone_pos[1],
-            distance_to_target,
-            self.last_distance
-        ]
-        assert len(state) == 4
-        return np.array(state, dtype=np.float32), reward, self._terminate, self._truncate, {}
+         
+        return state_space, reward, self._terminate, self._truncate, {}
 
 
     @property

@@ -30,89 +30,17 @@ from spg_overlay.utils.misc_data import MiscData
 from maps.map_env import EnvMap
 from random import randrange
 
+#import pyvirtualdisplay
+
 from stable_baselines3 import PPO
 from stable_baselines3.common.env_util import make_vec_env
-class RLDrone(DroneAbstract):
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        self.counter = 0
-        self.command = {"forward": 0,
-                        "lateral": 0.0,
-                        "rotation": 0.0,
-                        "grasper": 0}
-        # self.initial_pos = np.array([295,118])
-        # self.last_distance = 0
-
-        # self.targets = {
-        #     'wounded_person': np.array([0,0]),
-        #     'rescue_center': np.array([295, 205]) 
-        # }
-        # self.assigned_target = 'wounded_person'
-        # self.target_location = self.targets[self.assigned_target]
-
-        # #self.model = PPO.load('/home/rafa/Desktop/Projects/swarm-rescue/saved_models/saved_models.zip')
-        # self.initial_obs = [
-        #     self.initial_pos[0],
-        #     self.initial_pos[1],
-        #     np.linalg.norm(np.array(self.target_location - self.initial_pos)),
-        #     self.last_distance
-        # ]
-        # #self.inital_action, _ = self.model.predict(self.initial_obs, deterministic=True)
-
-
-    def define_message_for_all(self):
-        """
-        Here, we don't need communication...
-        """
-        pass
-  
-    def map_action(self, action, action_type='cont'):
-        if action_type == 'discrete':
-            if action == 0:
-                self.command["forward"] = 0
-                self.command["rotation"] = 0
-            if action == 1:
-                self.command["forward"] = 1
-                self.command["rotation"] = 0
-            if action == 2:
-                self.command["forward"] = 0
-                self.command["rotation"] = 1
-            if action == 3:
-                self.command["forward"] = 1
-                self.command["rotation"] = 1
-        else:
-            self.command["forward"] = action[0]
-            self.command["rotation"] = action[1]
-        return self.command
-
-    def control(self):
-        """
-        The Drone will move forward and turn for a random angle when an obstacle is hit
-        """
-        self.counter += 1
-        action = 0
-        if self.counter == 1:
-            action = self.inital_action
-            return self.map_action(action)
+from drones.RLDrone import RLDrone
         
-        pos = np.array(self.true_position())
-        distance = np.linalg.norm(np.array(self.target_location - pos))
-        obs = [
-            self.true_position()[0],
-            self.true_position()[1],
-            distance,
-            self.last_distance
-
-        ]
-        self.last_distance = distance
-        action, _ = self.model.predict(obs, deterministic=True)
-        print(action)
-        return self.map_action(action)
-        
-
-
 
 def main():
+    
+    #pyvirtualdisplay.Display(visible=0, size=(1024, 768)).start()
+    
     my_map = EnvMap()
     my_map.reset_map()
     

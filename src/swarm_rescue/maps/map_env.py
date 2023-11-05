@@ -36,12 +36,12 @@ class EnvMap(MapAbstract):
         # self._no_gps_zone = NoGpsZone(size=(400, 500))
         # self._no_gps_zone_pos = ((-190, 0), 0)
 
-        self._wounded_persons_pos = [(0,0)]
+        self._wounded_persons_pos = [(random.randrange(-300, 300), random.randrange(-100, 100))]
         self._number_wounded_persons = len(self._wounded_persons_pos)
         self._wounded_persons: List[WoundedPerson] = []
 
-        orient = math.pi#math.pi
-        self._drones_pos = [((100, 100), orient)]
+        orient = random.uniform(-math.pi, math.pi)#math.pi
+        self._drones_pos = [((random.randrange(-300, 300), random.randrange(-100, 100)), orient)]
         self._number_drones = len(self._drones_pos)
         self._drones: List[DroneAbstract] = []
 

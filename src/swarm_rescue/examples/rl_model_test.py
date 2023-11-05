@@ -43,14 +43,13 @@ class RLDrone(DroneAbstract):
                         "lateral": 0.0,
                         "rotation": 0.0,
                         "grasper": 0}
-        self.iter_path = 0
-        self.path_done = Path()
         self.initial_pos = np.array([295,118])
         self.current_location = np.array([295,118])
         self.orientation = math.pi #math.pi
+        self.last_distance = 0
 
         self.targets = {
-            'wounded_person': fixed_target,
+            'wounded_person': np.array([0,0]),
             'rescue_center': np.array([295, 205]) 
         }
         self.assigned_target = 'wounded_person'
@@ -60,7 +59,8 @@ class RLDrone(DroneAbstract):
         self.initial_obs = [
             self.initial_pos[0],
             self.initial_pos[1],
-            np.linalg.norm(np.array(self.target_location - self.initial_pos))
+            np.linalg.norm(np.array(self.target_location - self.initial_pos)),
+            self.last_distance
         ]
         self.inital_action, _ = self.model.predict(self.initial_obs, deterministic=True)
 
@@ -71,19 +71,23 @@ class RLDrone(DroneAbstract):
         """
         pass
   
-    def map_action(self, action):
-        if action == 0:
-            self.command["forward"] = 0
-            self.command["rotation"] = 0
-        if action == 1:
-            self.command["forward"] = 1
-            self.command["rotation"] = 0
-        if action == 2:
-            self.command["forward"] = 0
-            self.command["rotation"] = 1
-        if action == 3:
-            self.command["forward"] = 1
-            self.command["rotation"] = 1
+    def map_action(self, action, action_type='cont'):
+        if action_type == 'discrete':
+            if action == 0:
+                self.command["forward"] = 0
+                self.command["rotation"] = 0
+            if action == 1:
+                self.command["forward"] = 1
+                self.command["rotation"] = 0
+            if action == 2:
+                self.command["forward"] = 0
+                self.command["rotation"] = 1
+            if action == 3:
+                self.command["forward"] = 1
+                self.command["rotation"] = 1
+        else:
+            self.command["forward"] = action[0]
+            self.command["rotation"] = action[1]
         return self.command
 
     def control(self):
@@ -96,11 +100,16 @@ class RLDrone(DroneAbstract):
             action = self.inital_action
             return self.map_action(action)
         
+        pos = np.array(self.true_position())
+        distance = np.linalg.norm(np.array(self.target_location - pos))
         obs = [
             self.true_position()[0],
             self.true_position()[1],
-            np.linalg.norm(np.array(self.target_location - self.true_position()))
+            distance,
+            self.last_distance
+
         ]
+        self.last_distance = distance
         action, _ = self.model.predict(obs, deterministic=True)
         print(action)
         return self.map_action(action)
@@ -116,34 +125,29 @@ def main():
                 )
 
     obs, _ = env.reset()
-    n_steps = 2
-    eval_episodes = 500
+    n_steps = 500
+    eval_episodes = 2
     total_reward = 0
-    weird_episodes = 0
     for episode in range(eval_episodes):
         obs, _ = env.reset()
         episode_reward = 0
         for asd in range(n_steps):
-            action = 1
-            #action, _ = model.predict(obs, deterministic=True)
-            #print(f"Step {step+1}")
-            #print(f"Action: {action}")
+            #action = 1
+            action, _ = model.predict(obs, deterministic=True)
+            print(f"Step {step+1}")
+            print(f"Action: {action}")
             obs, reward, terminated, truncated, info = env.step(action)
             done = terminated
             # if asd % 100 == 0 or asd == 600:
                 #print(f"obs = {obs}, reward = {reward}, done = {done}")
             if done:
-                weird_episodes += 1
-                print(obs)
                 print(f"Goal reached! Reward = {reward}")
-                print('------------------------------------------\n')
                 break
             episode_reward += reward
-        #print(f'Episode {episode}: Reward = {episode_reward}')
+        print(f'Episode {episode}: Reward = {episode_reward}')
         total_reward += reward
 
-    #print(f'Average reward over {eval_episodes} episodes: {total_reward/eval_episodes}')
-    print(f'episodes: {weird_episodes}')
+    print(f'Average reward over {eval_episodes} episodes: {total_reward/eval_episodes}')
 
 
 if __name__ == '__main__':

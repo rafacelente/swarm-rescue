@@ -19,7 +19,7 @@ from spg_overlay.gui_map.closed_playground import ClosedPlayground
 from spg_overlay.gui_map.gui_sr import GuiSR
 from spg_overlay.gui_map.map_abstract import MapAbstract
 from spg_overlay.utils.misc_data import MiscData
-
+import numpy as np
 
 class MyDroneKeyboard(DroneAbstract):
     def __init__(self, **kwargs):
@@ -36,6 +36,19 @@ class MyDroneKeyboard(DroneAbstract):
                    "lateral": 0.0,
                    "rotation": 0.0,
                    "grasper": 0}
+        
+        #detection_semantic = self.semantic_values()
+        #print(f'Detection Semantic: {detection_semantic}\n')
+
+        # lidar_values = self.lidar_values()
+        #print(f'Lidar values: {lidar_values}\n')
+        #print(self.base.grasper.grasped_entities)
+        # print(max(lidar_values))
+        #print(self.true_velocity())
+
+        detection_semantic = self.semantic_values()
+
+        print(detection_semantic)
         return command
 
 
