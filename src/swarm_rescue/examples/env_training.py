@@ -8,6 +8,8 @@ import os
 import sys
 from typing import List, Type, Tuple
 import gymnasium as gym
+import tensorflow as tf
+import datetime
 
 import arcade
 import numpy as np
@@ -54,7 +56,26 @@ def main():
     vec_env = make_vec_env(EnvSR, n_envs=1, env_kwargs=dict(playground=playground,
                the_map=my_map,))
     
-    model = PPO("MlpPolicy", vec_env, gamma=0.999, n_epochs=32, gae_lambda=0.95, ent_coef=0.01, batch_size=256, verbose=1, device='cuda').learn(total_timesteps=2000000)
+    # Logging (tensorboard)
+    logs_dir = './tensorboard/'
+    tensorboard_callback = tf.keras.callbacks.TensorBoard(log_dir=logs_dir, histogram_freq=1)
+
+
+    model = PPO("MlpPolicy", 
+                vec_env, gamma=0.999,
+                n_epochs=32,
+                gae_lambda=0.95,
+                ent_coef=0.01,
+                batch_size=256,
+                verbose=1,
+                device='cuda',
+                tensorboard_log=logs_dir
+                )
+
+    
+    
+    
+    model.learn(total_timesteps=2000000, tb_log_name='full_state_first_run', reset_num_timesteps=False)
     #model = PPO("MlpPolicy", env, verbose=1).learn(5)
 
     save_path = '/notebooks/saved_models/continuous_04112023.zip'
