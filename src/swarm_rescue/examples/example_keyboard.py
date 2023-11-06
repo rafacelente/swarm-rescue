@@ -20,6 +20,7 @@ from spg_overlay.gui_map.gui_sr import GuiSR
 from spg_overlay.gui_map.map_abstract import MapAbstract
 from spg_overlay.utils.misc_data import MiscData
 import numpy as np
+from spg_overlay.entities.drone_distance_sensors import DroneSemanticSensor
 
 class MyDroneKeyboard(DroneAbstract):
     def __init__(self, **kwargs):
@@ -46,10 +47,15 @@ class MyDroneKeyboard(DroneAbstract):
         # print(max(lidar_values))
         #print(self.true_velocity())
 
-        detection_semantic = self.semantic_values()
+        # detection_semantic = self.semantic_values()
+        # for data in detection_semantic:
+        #     if data.entity_type == DroneSemanticSensor.TypeEntity.WOUNDED_PERSON:
+        #         print(data)
+        #         print('\n')
 
-        print(detection_semantic)
+        print(self.true_angular_velocity())
         return command
+    
 
 
 class MyMapKeyboard(MapAbstract):

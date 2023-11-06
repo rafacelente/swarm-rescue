@@ -29,7 +29,7 @@ class RLDrone(DroneAbstract):
         self.just_grabbed_wounded = False
         self.rescue_center = np.array([295, 205])
 
-        #self.model = PPO.load('/home/rafa/Desktop/Projects/swarm-rescue/saved_models/continuous_04112023.zip')
+        self.model = PPO.load('/home/rafa/Desktop/Projects/swarm-rescue/saved_models/continuous_04112023.zip')
         self.initial_obs = self.state_space()
         #self.inital_action, _ = self.model.predict(self.initial_obs, deterministic=True)
         self.initial_action = np.array([0, 0, 0, 0]).astype(np.float32)
@@ -45,16 +45,18 @@ class RLDrone(DroneAbstract):
                         "forward": action[0],
                         "lateral": action[1],
                         "rotation": action[2],
-                        "grasper": action[3]
+                        "grasper": np.round(action[3]).astype(int)
         }
         return self.command
 
     def state_space(self):
         found_wounded, distance_to_wounded, angle_to_wounded = self.search_targets()
         distance_to_rc, angle_to_rc = self.distance_to_rc()
+
         return [
             *self.position(),
             *self.velocity(),
+            self.angular_vel(),
             self.angle(),
             *self.front_view(),
             distance_to_wounded,
@@ -66,14 +68,14 @@ class RLDrone(DroneAbstract):
             found_wounded
         ]
 
-    def control_in_training(self, action):
-        self.counter += 1
-        action = 0
-        if self.counter == 1:
-            action = self.inital_action
-            return self.map_action(action)
+    # def control_in_training(self, action):
+    #     self.counter += 1
+    #     action = 0
+    #     if self.counter == 1:
+    #         action = self.inital_action
+    #         return self.map_action(action)
         
-        return self.map_action(action)
+    #     return self.map_action(action)
 
     def control(self):
         """
@@ -82,19 +84,13 @@ class RLDrone(DroneAbstract):
         self.counter += 1
         action = 0
         if self.counter == 1:
-            action = self.inital_action
+            action = self.initial_action
             return self.map_action(action)
         
-        pos = np.array(self.true_position())
-        distance = np.linalg.norm(np.array(self.target_location - pos))
-        obs = [
-            self.true_position()[0],
-            self.true_position()[1],
-            distance,
-            self.last_distance
-        ]
+        
+        obs = self.state_space()
         action, _ = self.model.predict(obs, deterministic=True)
-        self.last_distance = distance
+        # self.last_distance = distance
         return self.map_action(action)
     
     def front_view(self, fov: Optional[int]=120):
@@ -154,6 +150,9 @@ class RLDrone(DroneAbstract):
     # This may be changed to measured_compass_angle
     def angle(self):
         return self.true_angle()
+
+    def angular_vel(self):
+        return self.true_angular_velocity()
     
     def distance_to_rc(self):
         dist_vector = np.array(self.rescue_center) - np.array(self.position())

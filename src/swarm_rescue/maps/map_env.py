@@ -22,7 +22,7 @@ class EnvMap(MapAbstract):
 
     def __init__(self, zones_config: ZonesConfig = ()):
         super().__init__(zones_config)
-        self._time_step_limit = 500
+        self._time_step_limit = 1200
         self._real_time_limit = 100
 
         # PARAMETERS MAP
