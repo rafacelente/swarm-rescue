@@ -32,7 +32,7 @@ class RLDrone(DroneAbstract):
         #self.model = PPO.load('/home/rafa/Desktop/Projects/swarm-rescue/saved_models/continuous_04112023.zip')
         self.initial_obs = self.state_space()
         #self.inital_action, _ = self.model.predict(self.initial_obs, deterministic=True)
-        self.initial_action = [0, 0, 0, 0]
+        self.initial_action = np.array([0, 0, 0, 0]).astype(np.float32)
 
     def define_message_for_all(self):
         """
@@ -52,7 +52,7 @@ class RLDrone(DroneAbstract):
     def state_space(self):
         found_wounded, distance_to_wounded, angle_to_wounded = self.search_targets()
         distance_to_rc, angle_to_rc = self.distance_to_rc()
-        return ([
+        return [
             *self.position(),
             *self.velocity(),
             self.angle(),
@@ -60,12 +60,11 @@ class RLDrone(DroneAbstract):
             distance_to_wounded,
             angle_to_wounded,
             distance_to_rc,
-            angle_to_rc
-        ],
+            angle_to_rc,
             self.collided(),
             self.has_target(),
             found_wounded
-        )
+        ]
 
     def control_in_training(self, action):
         self.counter += 1
@@ -96,7 +95,6 @@ class RLDrone(DroneAbstract):
         ]
         action, _ = self.model.predict(obs, deterministic=True)
         self.last_distance = distance
-        print(action)
         return self.map_action(action)
     
     def front_view(self, fov: Optional[int]=120):
@@ -124,9 +122,9 @@ class RLDrone(DroneAbstract):
         return int(len(self.base.grasper.grasped_entities) == 1)
     
     def search_targets(self):
-        found_wounded = False
-        distance = None
-        angle = None
+        found_wounded = 0
+        distance = -1
+        angle = -1
         grasped = False
 
         detection_semantic = self.semantic_values()

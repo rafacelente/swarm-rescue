@@ -92,15 +92,24 @@ class EnvSR(gym.Env):
             # self.action_space = spaces.Discrete(n_actions) 
         
         # New action space: continuous
-        self.action_space = spaces.Box(low=-1.0, high=1.0, shape=(2,), dtype=np.float32)
-        
+        low=np.array([-1, -1, -1]).astype(np.float32)
+        high=np.array([1, 1, 1]).astype(np.float32)
+        self.continuous_action_space = spaces.Box(low=low, high=high, shape=(3,), dtype=np.float32)
+        self.binary_action_space = spaces.Box(low=0, high=1, shape=(1,), dtype=np.float32)
+        self.action_space = spaces.Box(
+            low=np.concatenate((self.continuous_action_space.low, self.binary_action_space.low)),
+            high=np.concatenate((self.continuous_action_space.high, self.binary_action_space.high)),
+            dtype=np.float32
+        )
         
         # State space definition
 
-        # 1) Discrete variables
-        collided = spaces.Discrete(2)
-        has_target = spaces.Discrete(2)
-        wounded_nearby = spaces.Discrete(2)
+        # 1) Binary variables
+        num_binary_vars = 3
+        binary_space = spaces.MultiBinary(num_binary_vars) # collided, has_target, wounded_nearby
+        # collided = spaces.Discrete(2)
+        # has_target = spaces.Discrete(2)
+        # wounded_nearby = spaces.Discrete(2)
 
         # 2) Continuous variables
         max_x = np.array(self._the_map._size_area)[0]/2
@@ -129,8 +138,8 @@ class EnvSR(gym.Env):
                 *min_view_distance_list, # Lidar values (fov)
                 min_semantic_distance, # Semantic sensor distance
                 -max_angle, # Semantic sensor relative angle
-                min_distance_to_rc,
-                -max_angle
+                min_distance_to_rc, # Distance to Rescue Center
+                -max_angle # Angle to rescue center
             ]
         ).astype(np.float32)
         high = np.array(
@@ -143,19 +152,18 @@ class EnvSR(gym.Env):
                 *max_view_distance_list, # Lidar values (fov)
                 max_semantic_distance, # Semantic sensor distance
                 max_angle, # Semantic sensor relative angle
-                max_distance_to_rc,
-                max_angle
+                max_distance_to_rc, # Distance to Rescue Center
+                max_angle # Angle to rescue center
             ]
         ).astype(np.float32)
-        continuous = spaces.Box(low, high)
+        continuous = spaces.Box(low=low, high=high)
 
-        self.observation_space = spaces.Tuple((
-            continuous,
-            collided,
-            has_target,
-            wounded_nearby
-        ))
-        
+        total_space_length = num_binary_vars + np.prod(continuous.shape)
+        low = np.concatenate(([0] * num_binary_vars, continuous.low))
+        high = np.concatenate(([1] * num_binary_vars, continuous.high))
+
+        self.observation_space = spaces.Box(low=low, high=high, dtype=np.float32)
+
         # I don't know what this is
         self.render_mode = render_mode
 
@@ -196,13 +204,10 @@ class EnvSR(gym.Env):
         self._playground.reset()
         self.objective = self._the_map._wounded_persons_pos[0]
 
-        #print(f'Drone loc: {self._drones[0].true_position()}')
-        #print(f'Target loc: {self._the_map._wounded_persons_pos[0]}')
-
-        # return self.step(0)[0], {} DISCRETE
-        return self.step(np.zeros(shape=(self.observation_space.shape)))[0], {}
+        return self.step(np.zeros(shape=(self.action_space.shape)))[0], {}
 
     def step(self, action):
+        action[3] = np.round(action[3]).astype(int) # This rounds up or down the continuous variable that is supposed to be binary
         self._elapsed_time += 1
         
         self._the_map.explored_map.update_drones(self._drones)
@@ -218,16 +223,18 @@ class EnvSR(gym.Env):
         reward = 0
         
         state_space = self._drones[0].state_space()
-        continuous, collided, has_target, found_wounded = state_space
         
-        drone_pos = continuous[0:2]
-        drone_vel = continuous[2:4]
-        drone_angle = continuous[4]
-        fov_view = continuous[5:65]
-        distance_to_wounded = continuous[65]
-        angle_to_wounded = continuous[66]
-        distance_to_rc = continuous[67]
-        angle_to_rc = continuous[68]
+        drone_pos = state_space[0:2]
+        drone_vel = state_space[2:4]
+        drone_angle = state_space[4]
+        fov_view = state_space[5:65]
+        distance_to_wounded = state_space[65]
+        angle_to_wounded = state_space[66]
+        distance_to_rc = state_space[67]
+        angle_to_rc = state_space[68]
+        collided = state_space[69]
+        has_target = state_space[70]
+        found_wounded = state_space[71]
         
         # Maybe change this to a state machine
         if not has_target:
@@ -236,7 +243,7 @@ class EnvSR(gym.Env):
                 reward += (drone_vel[0]*0.005 + drone_vel[0]*0.005 - 0.05*collided)
             elif found_wounded and not self._drones[0].just_found_wounded:
                 self._drones[0].just_found_wounded = True
-                reward += 5
+                reward += 10
             else:
                 self.state = 'approach'
                 reward += 1/(100*np.absolute(angle_to_wounded)/np.pi + 0.9)
@@ -245,7 +252,7 @@ class EnvSR(gym.Env):
             reward += 0.005
             if not self._drones[0].just_grabbed_wounded:
                 self.state = 'return'
-                self.drones[0].just_grabbed_wounded = True
+                self._drones[0].just_grabbed_wounded = True
                 reward += 20
             else:
                 reward += 1/(20*np.absolute(angle_to_rc)/np.pi + 0.5)
@@ -256,8 +263,8 @@ class EnvSR(gym.Env):
                     self._terminate = True
 
 
-        print(self.state)
-        print(reward)
+        # print(self.state)
+        # print(reward)
         end_real_time = time.time()
         last_real_time_elapsed = self._real_time_elapsed
         self._real_time_elapsed = (end_real_time - self._start_real_time)
