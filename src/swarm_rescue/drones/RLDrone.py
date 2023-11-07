@@ -13,6 +13,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 
 from spg_overlay.entities.drone_abstract import DroneAbstract
 from spg_overlay.entities.drone_distance_sensors import DroneSemanticSensor
+from spg_overlay.entities.drone_sensors import DroneOdometer
 
 from stable_baselines3 import PPO
 
@@ -29,7 +30,7 @@ class RLDrone(DroneAbstract):
         self.just_grabbed_wounded = False
         self.rescue_center = np.array([295, 205])
 
-        self.model = PPO.load('/home/rafa/Desktop/Projects/swarm-rescue/saved_models/continuous_04112023.zip')
+        self.model = PPO.load('/home/rafa/Desktop/Projects/swarm-rescue/saved_models/ss_73_2000000_steps.zip')
         self.initial_obs = self.state_space()
         #self.inital_action, _ = self.model.predict(self.initial_obs, deterministic=True)
         self.initial_action = np.array([0, 0, 0, 0]).astype(np.float32)
@@ -58,6 +59,7 @@ class RLDrone(DroneAbstract):
             *self.velocity(),
             self.angular_vel(),
             self.angle(),
+            *self.direction_vector(),
             *self.front_view(),
             distance_to_wounded,
             angle_to_wounded,
@@ -127,12 +129,16 @@ class RLDrone(DroneAbstract):
         if detection_semantic is not None:
             for data in detection_semantic:
                 if data.entity_type == DroneSemanticSensor.TypeEntity.WOUNDED_PERSON and not data.grasped:
-                    found_wounded = True
+                    found_wounded = 1
                     distance = data.distance
                     angle = data.angle
                     grasped = data.grasped
         return found_wounded, distance, angle #, grasped
     
+    def direction_vector(self):
+        distance, alpha, _ = self.odometer_values()
+        return np.array([distance*np.cos(alpha), distance*np.sin(alpha)])
+        
     def accurate_position(self):
         return self.true_position()
     

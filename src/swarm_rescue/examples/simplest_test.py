@@ -26,6 +26,7 @@ from spg_overlay.utils.utils import normalize_angle
 from spg_overlay.utils.misc_data import MiscData
 from maps.map_simple import MyMapSimple
 from state_machine import InformedSimpleDrone
+from spg_overlay.entities.drone_distance_sensors import DroneSemanticSensor
 from random import randrange
 
 random_target = (random.randrange(-300, 300), random.randrange(-300, 300))
@@ -95,9 +96,10 @@ class MyDronePid(DroneAbstract):
         return self.state_machine.get_command()
 
     def draw_bottom_layer(self):
-        self.draw_vector()
-        self.draw_direction()
-        self.draw_interesting_points()
+        self.draw_distance_vector()
+        # self.draw_vector()
+        # self.draw_direction()
+        # self.draw_interesting_points()
 
     def draw_path(self, path: Path(), color: Tuple[int, int, int]):
         length = path.length()
@@ -111,8 +113,38 @@ class MyDronePid(DroneAbstract):
                 arcade.draw_line(pt2[0], pt2[1], pt1[0], pt1[1], color)
             pt2 = pt1
 
+    def search_targets(self):
+        found_wounded = 0
+        distance = -1
+        angle = -1
+        grasped = False
+
+        detection_semantic = self.semantic_values()
+        if detection_semantic is not None:
+            for data in detection_semantic:
+                if data.entity_type == DroneSemanticSensor.TypeEntity.WOUNDED_PERSON and not data.grasped:
+                    found_wounded = True
+                    distance = data.distance
+                    angle = data.angle
+                    grasped = data.grasped
+        return found_wounded, distance, angle #, grasped
+
+    def draw_distance_vector(self):
+        found_wounded, distance, angle = self.search_targets()
+        pt1 = np.array([self.true_position()[0], self.true_position()[1]]) + self._half_size_array
+        #print(self.true_angle())
+        if found_wounded:
+            print(f'distance: {distance}')
+            relative_wounded_vector = np.array([distance*np.cos(self.true_angle() - angle), distance*np.sin(self.true_angle() - angle)])
+            arcade.draw_line(pt1[0],
+                        pt1[1],
+                        relative_wounded_vector[0] + pt1[0],
+                        relative_wounded_vector[1] + pt1[1],
+                        color=(0,0,0))
+
     def draw_vector(self):     
-        dist_vector = self.target_location - self.initial_pos 
+        dist_vector = self.target_location - self.initial_pos
+                
         arcade.draw_line(self.initial_pos[0] + self._half_size_array[0],
                         self.initial_pos[1] + self._half_size_array[1],
                         dist_vector[0],

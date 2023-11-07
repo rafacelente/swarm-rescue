@@ -7,6 +7,9 @@ __pycache__
 *.calltree
 swarm_rescue.egg-info
 
+# Saved models
+saved_models/*
+
 # Temporary and binary files
 *~
 *.py[cod]
