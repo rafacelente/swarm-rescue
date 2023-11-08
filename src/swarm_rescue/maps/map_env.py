@@ -85,16 +85,24 @@ class EnvMap(MapAbstract):
 
         return playground
 
-    def reset_map(self, reset_type: Optional[int] = 1, random_range: Optional[Tuple[int, int]] = None):
-        # Reset Type 0 : fixed
-        loc = self._wounded_persons_pos
-        # Reset type 1: random
-        if reset_type == 1:
-            if random_range is None:
-                max_x = np.array(self._size_area)[0]/2 - 50
-                max_y = np.array(self._size_area)[1]/2 - 50
+    # def reset_map(self, reset_type: Optional[int] = 1, random_range: Optional[Tuple[int, int]] = None):
+    #     # Reset Type 0 : fixed
+    #     loc = self._wounded_persons_pos
+    #     # Reset type 1: random
+    #     if reset_type == 1:
+    #         if random_range is None:
+    #             max_x = np.array(self._size_area)[0]/2 - 50
+    #             max_y = np.array(self._size_area)[1]/2 - 50
             
-            loc = (random.randrange(-max_x, max_x), random.randrange(-max_y, max_y))
-        for i in range(self._number_wounded_persons):
-            self._wounded_persons_pos[i] = loc
+    #         loc = (random.randrange(-max_x, max_x), random.randrange(-max_y, max_y))
+    #     for i in range(self._number_wounded_persons):
+    #         self._wounded_persons_pos[i] = loc
+
+    def info(self):
+        wounded_persons_pos = [wounded.initial_coordinates for wounded in self._wounded_persons]
+        rescue_center_pos = self._rescue_center.initial_coordinates
+        print_info = ''
+        print_info += f'Wounded Pos: {wounded_persons_pos}\r\n'
+        print_info += f'Rescue Center Pos: {rescue_center_pos}\r\n'
+        return print_info
 

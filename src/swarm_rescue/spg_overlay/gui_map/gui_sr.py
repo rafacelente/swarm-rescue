@@ -16,7 +16,8 @@ from spg_overlay.gui_map.map_abstract import MapAbstract
 from spg_overlay.utils.mouse_measure import MouseMeasure
 from spg_overlay.reporting.screen_recorder import ScreenRecorder
 from spg_overlay.utils.visu_noises import VisuNoises
-
+import numpy as np
+import random
 
 class GuiSR(TopDownView):
     """
@@ -157,7 +158,7 @@ class GuiSR(TopDownView):
             self._drones[0].display()
 
         self._playground.step(commands=self._drones_commands, messages=self._messages)
-
+        self.print_info()
         self._visu_noises.update(enable=self._enable_visu_noises)
         # self._the_map.explored_map.display()
 
@@ -306,6 +307,8 @@ class GuiSR(TopDownView):
             self._terminate = True
 
         if key == arcade.key.R:
+            self.reset_map()
+            self.reset_drone()
             self._playground.reset()
             self._visu_noises.reset()
 
@@ -347,6 +350,47 @@ class GuiSR(TopDownView):
             self._mean_drones_health = DRONE_INITIAL_HEALTH
             self._percent_drones_destroyed = 0.0
 
+    def reset_drone(self, reset_type: Optional[int] = 1, random_range: Optional[Tuple[int, int]] = None):
+        # Reset Type 0 : fixed
+        loc = (100,100)
+        angle = np.pi
+        # Reset type 1: random
+        
+        for drone in self._drones:
+            if reset_type == 1:
+                if random_range is None:
+                    max_x = np.array(self._the_map._size_area)[0]/2 - 50
+                    max_y = np.array(self._the_map._size_area)[1]/2 - 50
+                
+                loc = (random.randrange(-max_x, max_x), random.randrange(-max_y, max_y))
+                while np.linalg.norm(np.array(loc) - self._the_map._wounded_persons_pos[0]) < 150:
+                    loc = (random.randrange(-max_x, max_x), random.randrange(-max_y, max_y))
+            angle = random.uniform(-np.pi, np.pi)
+            drone.initial_coordinates = (loc, angle)
+            drone.just_grabbed_wounded = False
+            drone.just_found_wounded = False
+            drone.reset()
+    
+    def reset_map(self, reset_type: Optional[int] = 1, random_range: Optional[Tuple[int, int]] = None):
+        for wounded in self._the_map._wounded_persons:
+            # Reset Type 0 : fixed
+            loc = wounded.initial_coordinates
+            # Reset type 1: random
+            if reset_type == 1:
+                if random_range is None:
+                    max_x = np.array(self._the_map._size_area)[0]/2 - 50
+                    max_y = np.array(self._the_map._size_area)[1]/2 - 50
+                
+                loc = (random.randrange(-max_x, max_x), random.randrange(-max_y, max_y))
+            wounded.initial_coordinates = ((loc, 0))
+
+    def print_info(self):
+        map_info = self._the_map.info()
+        print('Map Info: ', end='\r')
+        print(map_info, end='\r')
+        print('Drone info:', end='\r')
+        drone_info = self._drones[0].info()
+        print(drone_info, end='\r')
     @property
     def last_image(self):
         return self._last_image

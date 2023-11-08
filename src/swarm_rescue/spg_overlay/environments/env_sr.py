@@ -191,27 +191,6 @@ class EnvSR(gym.Env):
         # I don't know what this is
         self.render_mode = render_mode
 
-    # Doesn't check for overlapping...
-    def reset_drone(self, reset_type: Optional[int] = 1, random_range: Optional[Tuple[int, int]] = None):
-        # Reset Type 0 : fixed
-        loc = (100,100)
-        angle = np.pi
-        # Reset type 1: random
-        if reset_type == 1:
-            if random_range is None:
-                max_x = np.array(self._the_map._size_area)[0]/2 - 50
-                max_y = np.array(self._the_map._size_area)[1]/2 - 50
-            
-            loc = (random.randrange(-max_x, max_x), random.randrange(-max_y, max_y))
-            while np.linalg.norm(np.array(loc) - np.array(self.objective)) < 150:
-                loc = (random.randrange(-max_x, max_x), random.randrange(-max_y, max_y))
-            angle = random.uniform(-np.pi, np.pi)
-        
-        for drone in self._drones:
-            drone.initial_coordinates = (loc, angle)
-            drone.just_grabbed_wounded = False
-            drone.just_found_wounded = False
-            drone.reset()
 
     def reset(self, seed: Optional[int]=None):
         #print('reseting environment...')
@@ -242,10 +221,9 @@ class EnvSR(gym.Env):
             }
         }
 
-        self._the_map.reset_map(reset_type=self._reset_type)
+        self.reset_map(reset_type=self._reset_type)
         self.reset_drone(reset_type=self._reset_type)
         self._playground.reset()
-        self.objective = self._the_map._wounded_persons_pos[0]
 
         return self.step(np.zeros(shape=(self.action_space.shape)))[0], {}
 
@@ -360,6 +338,41 @@ class EnvSR(gym.Env):
          
         return state_space, reward, self._terminate, self._truncate, {}
 
+
+    # Doesn't check for overlapping...
+    def reset_drone(self, reset_type: Optional[int] = 1, random_range: Optional[Tuple[int, int]] = None):
+        # Reset Type 0 : fixed
+        loc = (100,100)
+        angle = np.pi
+        # Reset type 1: random
+        
+        for drone in self._drones:
+            if reset_type == 1:
+                if random_range is None:
+                    max_x = np.array(self._the_map._size_area)[0]/2 - 50
+                    max_y = np.array(self._the_map._size_area)[1]/2 - 50
+                
+                loc = (random.randrange(-max_x, max_x), random.randrange(-max_y, max_y))
+                while np.linalg.norm(np.array(loc) - self._the_map._wounded_persons_pos[0]) < 150:
+                    loc = (random.randrange(-max_x, max_x), random.randrange(-max_y, max_y))
+            angle = random.uniform(-np.pi, np.pi)
+            drone.initial_coordinates = (loc, angle)
+            drone.just_grabbed_wounded = False
+            drone.just_found_wounded = False
+            drone.reset()
+    
+    def reset_map(self, reset_type: Optional[int] = 1, random_range: Optional[Tuple[int, int]] = None):
+        for wounded in self._the_map._wounded_persons:
+            # Reset Type 0 : fixed
+            loc = wounded.initial_coordinates
+            # Reset type 1: random
+            if reset_type == 1:
+                if random_range is None:
+                    max_x = np.array(self._the_map._size_area)[0]/2 - 50
+                    max_y = np.array(self._the_map._size_area)[1]/2 - 50
+                
+                loc = (random.randrange(-max_x, max_x), random.randrange(-max_y, max_y))
+            wounded.initial_coordinates = ((loc, 0))
 
     @property
     def elapsed_time(self):

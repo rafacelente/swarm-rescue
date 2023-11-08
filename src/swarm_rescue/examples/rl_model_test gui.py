@@ -2,36 +2,18 @@
 This program can be launched directly.
 Example of how to control one drone
 """
-import random
-import math
 import os
 import sys
-from typing import List, Type, Tuple
 
-import arcade
 import numpy as np
 
 # This line add, to sys.path, the path to parent path of this file
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from spg_overlay.utils.path import Path
-from spg_overlay.utils.pose import Pose
-from spg_overlay.utils.utils import clamp
-from spg_overlay.entities.drone_abstract import DroneAbstract
-from spg_overlay.gui_map.closed_playground import ClosedPlayground
 from spg_overlay.gui_map.gui_sr import GuiSR
-from spg_overlay.environments.env_sr_gui import EnvSRGui
-from spg_overlay.environments.env_sr import EnvSR
 
 #from spg_overlay.gui_map.env_logic import EnvLogic
-from spg_overlay.gui_map.map_abstract import MapAbstract
-from spg_overlay.utils.utils import normalize_angle
-from spg_overlay.utils.misc_data import MiscData
-from maps.map_simple import MyMapSimple
 from maps.map_env import EnvMap
-from random import randrange
-import gymnasium as gym
-from stable_baselines3 import PPO
 from drones.RLDrone import RLDrone
 
         

@@ -30,7 +30,7 @@ class RLDrone(DroneAbstract):
         self.just_grabbed_wounded = False
         self.rescue_center = np.array([295, 205])
 
-        #self.model = PPO.load('/home/rafa/Desktop/Projects/swarm-rescue/saved_models/ss_75_1000000_steps.zip')
+        self.model = PPO.load('/home/rafa/Desktop/Projects/swarm-rescue/saved_models/ss_75_1000000_steps.zip')
         self.initial_obs = self.state_space()
         #self.inital_action, _ = self.model.predict(self.initial_obs, deterministic=True)
         self.initial_action = np.array([0, 0, 0, 0]).astype(np.float32)
@@ -54,7 +54,7 @@ class RLDrone(DroneAbstract):
         found_wounded, distance_to_wounded, angle_to_wounded = self.search_targets()
         distance_to_rc, angle_to_rc = self.distance_to_rc()
 
-        return [
+        ss = [
             *self.position(),
             *self.velocity(),
             self.angular_vel(),
@@ -70,14 +70,7 @@ class RLDrone(DroneAbstract):
             found_wounded
         ]
 
-    # def control_in_training(self, action):
-    #     self.counter += 1
-    #     action = 0
-    #     if self.counter == 1:
-    #         action = self.inital_action
-    #         return self.map_action(action)
-        
-    #     return self.map_action(action)
+        return ss
 
     def control(self):
         """
@@ -95,6 +88,9 @@ class RLDrone(DroneAbstract):
         # self.last_distance = distance
         print(self.map_action(action))
         return self.map_action(action)
+    
+    def full_view(self):
+        return self.lidar_values()
     
     def front_view(self, fov: Optional[int]=120):
         
@@ -166,4 +162,23 @@ class RLDrone(DroneAbstract):
         distance = np.linalg.norm(dist_vector)
         angle = np.arctan2(dist_vector[1], dist_vector[0])
         return distance, angle
+
+    def info(self):
+        found_wounded, distance_to_wounded, angle_to_wounded = self.search_targets()
+        distance_to_rc, angle_to_rc = self.distance_to_rc()
+
+        print_info = ''
+        print_info += f'Vel = {self.velocity()}\r\n'
+        print_info += f'Angular Vel = {self.angular_vel()}\r\n'
+        print_info += f'Direction Vec = {self.direction_vector()}\r\n'
+        print_info += f'Front View = {self.front_view()}\r\n'
+        print_info += f'Dist. 2 Wounded = {distance_to_wounded}\r\n'
+        print_info += f'Angle 2 Wounded = {angle_to_wounded}\r\n'
+        print_info += f'Dist. 2 RC = {distance_to_rc}\r\n'
+        print_info += f'Angle. 2 RC = {angle_to_rc}\r\n'
+        print_info += f'Collided = {self.collided()}\r\n'
+        print_info += f'Has target = {self.has_target()}\r\n'
+        print_info += f'Found wounded = {found_wounded}\r\n'
+        
+        return print_info
         
