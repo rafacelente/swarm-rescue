@@ -21,7 +21,7 @@ fixed_target = (0,0)
 class RLDrone(DroneAbstract):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self.counter = 0
+        self.internal_clock = 0
         self.command = {"forward": 0,
                         "lateral": 0.0,
                         "rotation": 0.0,
@@ -51,16 +51,18 @@ class RLDrone(DroneAbstract):
         return self.command
 
     def state_space(self):
+        self.internal_clock += 1
         found_wounded, distance_to_wounded, angle_to_wounded = self.search_targets()
         distance_to_rc, angle_to_rc = self.distance_to_rc()
 
         ss = [
+            self.internal_clock,
             *self.position(),
             *self.velocity(),
             self.angular_vel(),
             self.angle(),
             *self.direction_vector(),
-            *self.front_view(),
+            *self.full_view(),
             distance_to_wounded,
             angle_to_wounded,
             distance_to_rc,
@@ -76,9 +78,9 @@ class RLDrone(DroneAbstract):
         """
         The Drone will move forward and turn for a random angle when an obstacle is hit
         """
-        self.counter += 1
+        self.internal_clock += 1
         action = 0
-        if self.counter == 1:
+        if self.internal_clock == 1:
             action = self.initial_action
             return self.map_action(action)
         
@@ -181,4 +183,5 @@ class RLDrone(DroneAbstract):
         print_info += f'Found wounded = {found_wounded}\r\n'
         
         return print_info
+
         

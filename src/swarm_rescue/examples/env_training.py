@@ -49,6 +49,9 @@ class RewardLoggerCallback(BaseCallback):
         self.n_calls = 0
         self.episodes = 0
         self.average_reward = {
+            'general': {
+                'time_step_penalty': 0
+            },
             'search': {
                 'move_reward': 0,
                 'collision_penalty': 0
@@ -56,13 +59,13 @@ class RewardLoggerCallback(BaseCallback):
             'approach': {
                 'bias': 0,
                 'just_found_wounded': 0,
-                'alignment_dot_product': 0,
+                #'alignment_dot_product': 0,
                 'approach_reward': 0
             },
             'return': {
                 'bias': 0,
                 'just_grabbed_wounded': 0,
-                'alignment_dot_product': 0,
+                #'alignment_dot_product': 0,
                 'approach_reward': 0,
                 'goal_reached': 0
             }
@@ -95,13 +98,12 @@ def main():
     #pyvirtualdisplay.Display(visible=0, size=(1024, 768)).start()
     
     my_map = EnvMap()
-    my_map.reset_map()
-    
     playground = my_map.construct_playground(drone_type=RLDrone)
 
     env = EnvSR(playground=playground,
                the_map=my_map,
     )
+    env.reset()
     
 
     vec_env = make_vec_env(EnvSR, n_envs=1, env_kwargs=dict(playground=playground,
@@ -126,15 +128,15 @@ def main():
     checkpoint_callback = CheckpointCallback(
         save_freq=500000,
         save_path='./saved_models',
-        name_prefix='ss_75')
+        name_prefix='ss_197')
     reward_log_callback = RewardLoggerCallback(log_dir=f'{logs_dir}/rewards_log')
 
-    save_path = './saved_models/ss_75_08112023.zip'
+    save_path = './saved_models/ss_197_08112023.zip'
     
     
     # Training    
     model.learn(total_timesteps=4000000, 
-                tb_log_name='full_state_first_run', 
+                tb_log_name='ss_197', 
                 reset_num_timesteps=False,
                 callback=[checkpoint_callback, reward_log_callback])
     model.save(save_path)

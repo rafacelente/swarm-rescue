@@ -39,6 +39,9 @@ class EnvSR(gym.Env):
         self._playground.window.set_size(*self._playground.size)
         self.state = 'search'
         self.reward_dict = {
+            'general': {
+                'time_step_penalty': 0
+            },
             'search': {
                 'move_reward': 0,
                 'collision_penalty': 0
@@ -46,13 +49,13 @@ class EnvSR(gym.Env):
             'approach': {
                 'bias': 0,
                 'just_found_wounded': 0,
-                'alignment_dot_product': 0,
+                #'alignment_dot_product': 0,
                 'approach_reward': 0
             },
             'return': {
                 'bias': 0,
                 'just_grabbed_wounded': 0,
-                'alignment_dot_product': 0,
+                #'alignment_dot_product': 0,
                 'approach_reward': 0,
                 'goal_reached': 0
             }
@@ -128,6 +131,8 @@ class EnvSR(gym.Env):
         binary_space = spaces.MultiBinary(num_binary_vars) # collided, has_target, wounded_nearby
 
         # 2) Continuous variables
+        min_t = 0
+        max_t = self._time_step_limit
         max_x = np.array(self._the_map._size_area)[0]/2
         max_y = np.array(self._the_map._size_area)[1]/2
         max_v = 5.5 # Max velocity (vx, vy)
@@ -141,13 +146,14 @@ class EnvSR(gym.Env):
         min_distance_to_rc = 0
         max_distance_to_rc = max(np.array(self._the_map._size_area))
         
-        fov = 120
-        n_beams = 60 # Change this when fov changes
+        fov = 360
+        n_beams = 181 # Change this when fov changes
         min_view_distance_list = [min_view_distance for i in range(n_beams)]
         max_view_distance_list = [max_view_distance for i in range(n_beams)]
 
         low = np.array(
             [
+                min_t,
                 -max_x, # x
                 -max_y, # y
                 -max_v, # vx
@@ -165,6 +171,7 @@ class EnvSR(gym.Env):
         ).astype(np.float32)
         high = np.array(
             [
+                max_t,
                 max_x, # x
                 max_y, # y
                 max_v, # vx
@@ -202,6 +209,9 @@ class EnvSR(gym.Env):
         self._terminate = False
         self._truncate = False
         self.reward_dict = {
+            'general': {
+                'time_step_penalty': 0
+            },
             'search': {
                 'move_reward': 0,
                 'collision_penalty': 0
@@ -209,13 +219,13 @@ class EnvSR(gym.Env):
             'approach': {
                 'bias': 0,
                 'just_found_wounded': 0,
-                'alignment_dot_product': 0,
+                #'alignment_dot_product': 0,
                 'approach_reward': 0
             },
             'return': {
                 'bias': 0,
                 'just_grabbed_wounded': 0,
-                'alignment_dot_product': 0,
+                #'alignment_dot_product': 0,
                 'approach_reward': 0,
                 'goal_reached': 0
             }
@@ -244,21 +254,24 @@ class EnvSR(gym.Env):
         
         state_space = self._drones[0].state_space()
         
-        drone_pos = state_space[0:2]
-        drone_vel = state_space[2:4]
-        drone_w = state_space[4]
-        drone_angle = state_space[5]
-        direction_vector = state_space[6:8]
-        fov_view = state_space[8:68]
-        distance_to_wounded = state_space[68]
-        angle_to_wounded = state_space[69]
-        distance_to_rc = state_space[70]
-        angle_to_rc = state_space[71]
-        collided = state_space[72]
-        has_target = state_space[73]
-        found_wounded = state_space[74]
+        drone_clock = state_space[0]
+        drone_pos = state_space[1:3]
+        drone_vel = state_space[3:5]
+        drone_w = state_space[5]
+        drone_angle = state_space[6]
+        direction_vector = state_space[7:9]
+        fov_view = state_space[9:190]
+        distance_to_wounded = state_space[190]
+        angle_to_wounded = state_space[191]
+        distance_to_rc = state_space[192]
+        angle_to_rc = state_space[193]
+        collided = state_space[194]
+        has_target = state_space[195]
+        found_wounded = state_space[196]
+
 
         time_step_penalty = -0.015
+        self.reward_dict['general']['time_step_penalty'] += time_step_penalty
         reward += time_step_penalty
 
 
@@ -284,14 +297,16 @@ class EnvSR(gym.Env):
                     reward += just_found_wounded
                 
                 relative_wounded_vector = np.array([distance_to_wounded*np.cos(drone_angle - angle_to_wounded), distance_to_wounded*np.sin(drone_angle - angle_to_wounded)])
-                alignment_dot_product = 0.75*np.dot(np.array(direction_vector), relative_wounded_vector)/(np.linalg.norm(direction_vector)*np.linalg.norm(relative_wounded_vector))
-                approach_reward = 4/(np.exp((distance_to_wounded - 40)/16) + 1)
-                
+                #alignment_dot_product = 0.75*np.dot(np.array(direction_vector), relative_wounded_vector)/(np.linalg.norm(direction_vector)*np.linalg.norm(relative_wounded_vector))
+                #approach_reward = 4/(np.exp((distance_to_wounded - 40)/16) + 1)
+                alignment = np.dot(np.array(direction_vector), relative_wounded_vector)/(np.linalg.norm(direction_vector)*np.linalg.norm(relative_wounded_vector))
+                approach_reward = 4*alignment/(np.exp((distance_to_wounded - 40)/16) + 1)
 
-                self.reward_dict['approach']['alignment_dot_product'] += alignment_dot_product
+                #self.reward_dict['approach']['alignment_dot_product'] += alignment_dot_product
                 self.reward_dict['approach']['approach_reward'] += approach_reward
                 self.reward_dict['approach']['bias'] += bias 
-                reward += (alignment_dot_product + approach_reward + bias)
+                #reward += (alignment_dot_product + approach_reward + bias)
+                reward += (approach_reward + bias)
         else:
             bias = 0.15
             self.state = 'return'
@@ -303,14 +318,16 @@ class EnvSR(gym.Env):
                 reward += just_grabbed_wounded
             
             relative_rc_vector = np.array([distance_to_wounded*np.cos(drone_angle - angle_to_rc), distance_to_wounded*np.sin(drone_angle - angle_to_rc)])
-            alignment_dot_product = 0.8*np.dot(np.array(direction_vector), relative_rc_vector)/(np.linalg.norm(direction_vector)*np.linalg.norm(relative_rc_vector))
-            approach_reward = 20/(np.exp((distance_to_rc - 40)/50) + 1)
+            #alignment_dot_product = 0.8*np.dot(np.array(direction_vector), relative_rc_vector)/(np.linalg.norm(direction_vector)*np.linalg.norm(relative_rc_vector))
+            alignment = np.dot(np.array(direction_vector), relative_rc_vector)/(np.linalg.norm(direction_vector)*np.linalg.norm(relative_rc_vector))
+            approach_reward = 20*alignment/(np.exp((distance_to_rc - 40)/256) + 1)
 
-            self.reward_dict['return']['alignment_dot_product'] += alignment_dot_product
+            #self.reward_dict['return']['alignment_dot_product'] += alignment_dot_product
             self.reward_dict['return']['approach_reward'] += approach_reward
             self.reward_dict['return']['bias'] += bias 
 
-            reward += (alignment_dot_product + approach_reward + bias)
+            #reward += (alignment_dot_product + approach_reward + bias)
+            reward += (approach_reward + bias)
 
             if distance_to_rc < 40:
                 goal_reached = 1000
@@ -347,6 +364,7 @@ class EnvSR(gym.Env):
         # Reset type 1: random
         
         for drone in self._drones:
+            drone.internal_clock = 0
             if reset_type == 1:
                 if random_range is None:
                     max_x = np.array(self._the_map._size_area)[0]/2 - 50
