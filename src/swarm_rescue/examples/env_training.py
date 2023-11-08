@@ -32,17 +32,67 @@ from spg_overlay.utils.misc_data import MiscData
 from maps.map_env import EnvMap
 from random import randrange
 
-import pyvirtualdisplay
+#import pyvirtualdisplay
 
 from stable_baselines3 import PPO
 from stable_baselines3.common.env_util import make_vec_env
-from stable_baselines3.common.callbacks import CheckpointCallback
+from stable_baselines3.common.callbacks import CheckpointCallback, BaseCallback
 from drones.RLDrone import RLDrone
-        
+
+
+from tensorboardX import SummaryWriter
+
+class RewardLoggerCallback(BaseCallback):
+    def __init__(self, log_dir: str, verbose=1):
+        super(RewardLoggerCallback, self).__init__(verbose)
+        self.writer = SummaryWriter(log_dir=log_dir)
+        self.n_calls = 0
+        self.episodes = 0
+        self.average_reward = {
+            'search': {
+                'move_reward': 0,
+                'collision_penalty': 0
+            },
+            'approach': {
+                'bias': 0,
+                'just_found_wounded': 0,
+                'alignment_dot_product': 0,
+                'approach_reward': 0
+            },
+            'return': {
+                'bias': 0,
+                'just_grabbed_wounded': 0,
+                'alignment_dot_product': 0,
+                'approach_reward': 0,
+                'goal_reached': 0
+            }
+        }
+    def _on_step(self) -> bool:
+        self.n_calls += 1
+        self.episodes += 1
+        env = self.training_env.envs[0]
+        reward_dict = env.reward_dict
+        for state, rewards in reward_dict.items():
+            for reward_name, reward_value in rewards.items():
+                self.average_reward[state][reward_name] += reward_value
+        return True
+
+    def _on_rollout_end(self) -> None:
+        env = self.training_env.envs[0]
+        reward_dict = env.reward_dict
+
+        # Here you log each component of the reward to TensorBoard
+        for state, rewards in reward_dict.items():
+            for reward_name, reward_value in rewards.items():
+                self.writer.add_scalar(f'rewards/{state}/{reward_name}', reward_value/self.episodes, self.n_calls)
+                self.average_reward[state][reward_name] = 0
+        self.episodes = 0
+        self.writer.flush()  # Make sure all pending events have been written to disk
+
 
 def main():
     
-    pyvirtualdisplay.Display(visible=0, size=(1024, 768)).start()
+    #pyvirtualdisplay.Display(visible=0, size=(1024, 768)).start()
     
     my_map = EnvMap()
     my_map.reset_map()
@@ -61,7 +111,6 @@ def main():
     logs_dir = './tensorboard/'
     tensorboard_callback = tf.keras.callbacks.TensorBoard(log_dir=logs_dir, histogram_freq=1)
 
-
     model = PPO("MlpPolicy", 
                 vec_env, gamma=0.9995,
                 n_epochs=16,
@@ -70,23 +119,24 @@ def main():
                 batch_size=1024,
                 verbose=1,
                 device='cuda',           
-                tensorboard_log=logs_dir
+                tensorboard_log=logs_dir,
                 )
 
     # Logging and saving
     checkpoint_callback = CheckpointCallback(
         save_freq=500000,
         save_path='./saved_models',
-        name_prefix='ss_73')
+        name_prefix='ss_75')
+    reward_log_callback = RewardLoggerCallback(log_dir=f'{logs_dir}/rewards_log')
 
-    save_path = './saved_models/ss_73_06112023.zip'
+    save_path = './saved_models/ss_75_08112023.zip'
     
     
     # Training    
     model.learn(total_timesteps=4000000, 
                 tb_log_name='full_state_first_run', 
                 reset_num_timesteps=False,
-                callback=checkpoint_callback)
+                callback=[checkpoint_callback, reward_log_callback])
     model.save(save_path)
     
     

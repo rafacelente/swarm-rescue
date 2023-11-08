@@ -30,7 +30,7 @@ class RLDrone(DroneAbstract):
         self.just_grabbed_wounded = False
         self.rescue_center = np.array([295, 205])
 
-        self.model = PPO.load('/home/rafa/Desktop/Projects/swarm-rescue/saved_models/ss_73_2000000_steps.zip')
+        #self.model = PPO.load('/home/rafa/Desktop/Projects/swarm-rescue/saved_models/ss_75_1000000_steps.zip')
         self.initial_obs = self.state_space()
         #self.inital_action, _ = self.model.predict(self.initial_obs, deterministic=True)
         self.initial_action = np.array([0, 0, 0, 0]).astype(np.float32)
@@ -93,6 +93,7 @@ class RLDrone(DroneAbstract):
         obs = self.state_space()
         action, _ = self.model.predict(obs, deterministic=True)
         # self.last_distance = distance
+        print(self.map_action(action))
         return self.map_action(action)
     
     def front_view(self, fov: Optional[int]=120):
